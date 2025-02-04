@@ -1,0 +1,223 @@
+-- Получаем сервисы
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local Camera = workspace.CurrentCamera
+
+-- Переменные
+local LocalPlayer = Players.LocalPlayer
+local AimbotEnabled = false
+local FOV = 50
+local AimTarget = "Head"  -- Начальное значение (голова)
+local MenuVisible = true
+local ESPEnabled = false  -- ESP выключен по умолчанию
+local ESPObjects = {}  -- Хранилище для объектов ESP
+
+-- GUI
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Parent = game.CoreGui
+
+local Frame = Instance.new("Frame", ScreenGui)
+Frame.Size = UDim2.new(0, 150, 0, 180)  -- Уменьшили размер для компактности
+Frame.Position = UDim2.new(0.5, -75, 0.5, -90)
+Frame.BackgroundColor3 = Color3.fromRGB(30, 30, 90)  -- Синий цвет
+Frame.Visible = MenuVisible  -- Меню будет видно по умолчанию
+
+-- Заголовок
+local Title = Instance.new("TextLabel", Frame)
+Title.Size = UDim2.new(1, 0, 0, 30)
+Title.Text = "Discord Hacker 2.02541 WARNING! Use this script at your own risk as it is in the category 'RAGE'"
+Title.TextColor3 = Color3.fromRGB(255, 255, 255)
+Title.BackgroundTransparency = 1
+Title.TextScaled = true
+
+-- Кнопка для открытия меню
+local ToggleButton = Instance.new("TextButton", ScreenGui)
+ToggleButton.Size = UDim2.new(0, 70, 0, 25)
+ToggleButton.Position = UDim2.new(0.9, -95, 0, 10)  -- Перемещена на 40 пикселей вправо
+ToggleButton.Text = "Menu"
+ToggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+ToggleButton.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+
+-- Эта кнопка теперь не исчезает при скрытии меню
+ToggleButton.MouseButton1Click:Connect(function()
+    MenuVisible = not MenuVisible  -- Переключение видимости меню
+    Frame.Visible = MenuVisible  -- Показываем или скрываем меню
+end)
+
+-- Memory Aim Bot переключатель
+local AimToggleButton = Instance.new("TextButton", Frame)
+AimToggleButton.Size = UDim2.new(0.8, 0, 0.15, 0)
+AimToggleButton.Position = UDim2.new(0.1, 0, 0.2, 0)
+AimToggleButton.Text = "Enable Aim Bot"
+AimToggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+AimToggleButton.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+AimToggleButton.MouseButton1Click:Connect(function()
+    AimbotEnabled = not AimbotEnabled
+    AimToggleButton.Text = AimbotEnabled and "Disable Aim Bot" or "Enable Aim Bot"
+end)
+
+-- FOV ползунок
+local FOVSlider = Instance.new("TextButton", Frame)
+FOVSlider.Size = UDim2.new(0.8, 0, 0.15, 0)
+FOVSlider.Position = UDim2.new(0.1, 0, 0.4, 0)
+FOVSlider.Text = "FOV: " .. FOV
+FOVSlider.TextColor3 = Color3.fromRGB(255, 255, 255)
+FOVSlider.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+FOVSlider.MouseButton1Click:Connect(function()
+    FOV = FOV + 10
+    if FOV > 300 then
+        FOV = 50
+    end
+    FOVSlider.Text = "FOV: " .. FOV
+end)
+
+-- FOV круг
+local FOVCircle = Drawing.new("Circle")
+FOVCircle.Color = Color3.fromRGB(255, 0, 0)
+FOVCircle.Thickness = 2
+FOVCircle.Filled = false
+
+RunService.RenderStepped:Connect(function()
+    if AimbotEnabled then
+        local screenSize = Camera.ViewportSize
+        FOVCircle.Position = Vector2.new(screenSize.X / 2, screenSize.Y / 2)
+        FOVCircle.Radius = FOV
+        FOVCircle.Visible = true
+    else
+        FOVCircle.Visible = false
+    end
+end)
+
+-- Получение ближайшей цели
+local function getClosestTarget()
+    local closestTarget = nil
+    local shortestDistance = FOV
+
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild(AimTarget) then
+            local part = player.Character[AimTarget]
+            local screenPosition, onScreen = Camera:WorldToViewportPoint(part.Position)
+
+            if onScreen then
+                -- Проверяем, есть ли препятствия между камерой и целью
+                local ray = Ray.new(Camera.CFrame.Position, (part.Position - Camera.CFrame.Position).unit * 500)
+                local hit = workspace:FindPartOnRayWithIgnoreList(ray, {LocalPlayer.Character})
+
+                -- Если препятствий нет, продолжаем обработку
+                if hit and hit:IsDescendantOf(player.Character) then
+                    local screenCenter = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+                    local distance = (Vector2.new(screenPosition.X, screenPosition.Y) - screenCenter).Magnitude
+
+                    if distance <= shortestDistance then
+                        closestTarget = part
+                        shortestDistance = distance
+                    end
+                end
+            end
+        end
+    end
+
+    return closestTarget
+end
+
+-- Memory Aim: Предсказание позиции с учетом дальности
+local function predictPosition(part)
+    local velocity = part.Velocity
+    local distance = (part.Position - Camera.CFrame.Position).Magnitude
+    local predictionTime = 0.15  -- Время для предсказания
+
+    -- Учитываем дальность, для дальних целей увеличиваем время предсказания
+    local adjustedPredictionTime = predictionTime * (distance / 100)
+
+    local predictedPosition = part.Position + velocity * adjustedPredictionTime
+    return predictedPosition
+end
+
+-- Создание ESP квадрата для игрока
+local function createESP(player)
+    local espBox = Drawing.new("Square")
+    espBox.Visible = false
+    espBox.Color = Color3.fromRGB(255, 0, 0)  -- Красный цвет квадрата
+    espBox.Thickness = 2
+    espBox.Filled = false
+
+    ESPObjects[player] = espBox
+end
+
+-- Удаление ESP, когда игрок уходит
+Players.PlayerRemoving:Connect(function(player)
+    if ESPObjects[player] then
+        ESPObjects[player]:Remove()
+        ESPObjects[player] = nil
+    end
+end)
+
+-- Обновление ESP для всех игроков
+local function updateESP()
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= Players.LocalPlayer and player.Character and player.Character:FindFirstChild("Head") then
+            if not ESPObjects[player] then
+                createESP(player)
+            end
+
+            local head = player.Character.Head
+            local screenPosition, onScreen = Camera:WorldToViewportPoint(head.Position)
+
+            if onScreen and ESPEnabled then
+                local espBox = ESPObjects[player]
+                espBox.Size = Vector2.new(50, 50)  -- Размер квадрата
+                espBox.Position = Vector2.new(screenPosition.X - 25, screenPosition.Y - 25)  -- Центрирование квадрата
+                espBox.Visible = true
+            else
+                ESPObjects[player].Visible = false
+            end
+        elseif ESPObjects[player] then
+            ESPObjects[player].Visible = false
+        end
+    end
+end
+
+-- Обновление ESP в каждом кадре
+RunService.RenderStepped:Connect(function()
+    updateESP()
+end)
+
+-- Кнопка для включения/выключения ESP
+local ESPToggleButton = Instance.new("TextButton", Frame)
+ESPToggleButton.Size = UDim2.new(0.8, 0, 0.15, 0)
+ESPToggleButton.Position = UDim2.new(0.1, 0, 0.8, 0)
+ESPToggleButton.Text = "Enable ESP"
+ESPToggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+ESPToggleButton.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+ESPToggleButton.MouseButton1Click:Connect(function()
+    ESPEnabled = not ESPEnabled
+    ESPToggleButton.Text = ESPEnabled and "Disable ESP" or "Enable ESP"
+end)
+
+-- Aim Bot
+RunService.RenderStepped:Connect(function()
+    if AimbotEnabled then
+        local target = getClosestTarget()
+        if target then
+            local predictedPosition = predictPosition(target)
+            Camera.CFrame = CFrame.lookAt(Camera.CFrame.Position, predictedPosition)
+        end
+    end
+end)
+
+-- Кнопка для переключения цели между головой и телом
+local TargetToggleButton = Instance.new("TextButton", Frame)
+TargetToggleButton.Size = UDim2.new(0.8, 0, 0.15, 0)
+TargetToggleButton.Position = UDim2.new(0.1, 0, 0.6, 0)
+TargetToggleButton.Text = "Target: Head"
+TargetToggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+TargetToggleButton.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+TargetToggleButton.MouseButton1Click:Connect(function()
+    if AimTarget == "Head" then
+        AimTarget = "Torso"
+        TargetToggleButton.Text = "Target: Torso"
+    else
+        AimTarget = "Head"
+        TargetToggleButton.Text = "Target: Head"
+    end
+end)
