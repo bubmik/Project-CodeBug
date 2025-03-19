@@ -1,0 +1,87 @@
+local workspace = game:GetService("Workspace")
+
+-- Функция для замены значений "Cooldown", "Ammo", "Recoil", "AmmoCapacity", "ReloadTime"
+local function setCooldownAmmoAndRecoil()
+    -- Применение изменений для AmmoCapacity по указанному пути
+    local grenadeLauncher = workspace:FindFirstChild("i_ebal1488ur")
+    if grenadeLauncher then
+        -- Для GrenadeLauncher
+        local ammoCapacity = grenadeLauncher:FindFirstChild("GrenadeLauncher") and grenadeLauncher.GrenadeLauncher:FindFirstChild("Configuration") and grenadeLauncher.GrenadeLauncher.Configuration:FindFirstChild("AmmoCapacity")
+        if ammoCapacity then
+            ammoCapacity.Value = 9999
+        end
+        -- Для ReloadTime
+        local reloadTime = grenadeLauncher:FindFirstChild("GrenadeLauncher") and grenadeLauncher.GrenadeLauncher:FindFirstChild("Configuration") and grenadeLauncher.GrenadeLauncher.Configuration:FindFirstChild("ReloadTime")
+        if reloadTime then
+            reloadTime.Value = 0  -- Можно поставить любое значение
+        end
+        -- Для других оружий или параметров
+        -- Можно повторить то же самое для других оружий или параметров, следуя аналогичной структуре
+    end
+    
+    -- Применение изменений для других объектов (Cooldown, Ammo, Recoil)
+    for _, obj in ipairs(workspace:GetDescendants()) do
+        -- Проверяем, что объект является типом "NumberValue" или "IntValue"
+        if obj:IsA("NumberValue") or obj:IsA("IntValue") then
+            -- Заменяем значение для объектов с названием, содержащим "Ammo"
+            if obj.Name:lower():find("ammo") then
+                obj.Value = 9999
+            end
+            
+            -- Заменяем значение для объектов с названием, содержащим "Recoil"
+            if obj.Name:lower():find("recoil") then
+                obj.Value = 0
+            end
+            
+            -- Заменяем значение для объектов с названием, содержащим "Cooldown"
+            if obj.Name:lower():find("cooldown") then
+                obj.Value = 0
+            end
+            
+            -- Заменяем значение для объектов с названием, содержащим "ReloadTime"
+            if obj.Name:lower():find("reloadtime") then
+                obj.Value = 0
+            end
+            
+            -- Применяем значение для "AmmoCapacity" в других объектах
+            if obj.Name:lower():find("ammocapacity") then
+                obj.Value = 99999
+            end
+        end
+    end
+end
+
+-- Запускаем цикл, который будет заменять значения "Cooldown", "Ammo", "Recoil", "ReloadTime" и "AmmoCapacity" каждые 2 секунды
+task.spawn(function()
+    while true do
+        setCooldownAmmoAndRecoil()
+        task.wait(2)  -- Задержка в 2 секунды перед следующей проверкой
+    end
+end)
+
+-- Применяем изменения при добавлении нового персонажа
+game:GetService("Players").LocalPlayer.CharacterAdded:Connect(function(character)
+    setCooldownAmmoAndRecoil()  -- Применение изменений при возрождении
+end)
+
+-- Отслеживание появления новых объектов "Cooldown", "Ammo", "Recoil", "ReloadTime" и "AmmoCapacity"
+workspace.DescendantAdded:Connect(function(descendant)
+    if (descendant:IsA("NumberValue") or descendant:IsA("IntValue")) then
+        if descendant.Name:lower():find("ammo") then
+            task.wait(0)  -- Короткая задержка для избежания ошибок
+            descendant.Value = 999
+        elseif descendant.Name:lower():find("recoil") then
+            task.wait(1)  -- Короткая задержка для избежания ошибок
+            descendant.Value = 0
+        elseif descendant.Name:lower():find("cooldown") then
+            task.wait(1)  -- Короткая задержка для избежания ошибок
+            descendant.Value = 0
+        elseif descendant.Name:lower():find("reloadtime") then
+            task.wait(1)  -- Короткая задержка для избежания ошибок
+            descendant.Value = 0
+        elseif descendant.Name:lower():find("ammocapacity") then
+            task.wait(0)  -- Короткая задержка для избежания ошибок
+            descendant.Value = 999
+        end
+    end
+end)
